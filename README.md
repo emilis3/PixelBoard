@@ -148,6 +148,9 @@ PixelBoard features a clean, minimal preference screen modeled directly after th
 > This repository ships **no prebuilt binaries**: no APK, no `.mpp` patch bundle, no patcher jar, and no signing keys.
 > Only install PixelBoard APKs that you built yourself from this source. Do not install prebuilt APKs or patch bundles from upstream releases or other mirrors.
 
+> [!CAUTION]
+> Sign every build with your own key. Signing keystores that were once committed to this repository have been removed from its history, but copies still exist upstream. **Never install anything signed with those old keys.** Keystores (`*.keystore`, `*.jks`, `*.p12`, `*.pem`) are git-ignored, and CI fails if one is committed.
+
 ### Option A: Build from Source, Then Sideload via ADB
 1. Build the patch bundle and APK from source as described in [Building & Patching](#️-building--patching).
 2. Connect your Android phone via USB with USB Debugging enabled and run:

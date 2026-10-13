@@ -21,3 +21,9 @@ input/splits*/
 
 # Log files
 *.log
+
+# Signing keys (never commit keystores or private keys)
+*.keystore
+*.jks
+*.p12
+*.pem
