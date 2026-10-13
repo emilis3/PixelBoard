@@ -71,10 +71,7 @@ adb shell am force-stop com.akshaykadam.pixelboard
 ```
 
 ### Option 3: Patch via Morphe Manager
-Add the custom patch source in Morphe Manager:
-```text
-https://raw.githubusercontent.com/Akshayykadam/PixelBoard/main/patches-bundle.json
-```
+Load a patch bundle (`.mpp`) that you built yourself from this repository's source. Do not add a remote auto-updating patch source.
 Select stock Gboard `v18.4.1.985164140-release-arm64-v8a` (or `v18.3.1`) and apply patches.
 
 ---
