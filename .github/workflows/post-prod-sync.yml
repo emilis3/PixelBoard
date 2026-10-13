@@ -1,0 +1,63 @@
+# After the owner merges the staging -> main PR: make staging's tip identical to
+# main and clear the `in staging` label from shipped issues.
+# Requires Settings -> Actions -> General -> Workflow permissions = read/write.
+name: Post-prod sync
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: post-prod-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'staging'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync staging to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main staging
+          main_sha=$(git rev-parse origin/main)
+          staging_sha=$(git rev-parse origin/staging)
+          if [ "$staging_sha" = "$PR_HEAD_SHA" ] || git merge-base --is-ancestor "$staging_sha" "$main_sha"; then
+            git push --force-with-lease=staging:"$staging_sha" origin "$main_sha":refs/heads/staging
+            echo "staging now at $main_sha"
+          else
+            git checkout -B staging origin/staging
+            git merge --no-edit origin/main
+            git push origin staging
+            echo "staging had newer commits; merged main into it"
+          fi
+
+      - name: Remove `in staging` from shipped issues
+        run: |
+          label="in staging"
+          closing=$(gh pr view "$PR_NUMBER" --json closingIssuesReferences --jq '.closingIssuesReferences[].number')
+          from_body=$(gh pr view "$PR_NUMBER" --json body --jq '.body' \
+            | grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?) #[0-9]+' | grep -oE '[0-9]+' || true)
+          closed_labeled=$(gh issue list --label "$label" --state closed --limit 200 --json number --jq '.[].number')
+          for n in $(printf '%s\n' $closing $from_body $closed_labeled | sort -un); do
+            if gh issue view "$n" --json labels --jq '.labels[].name' 2>/dev/null | grep -qxF "$label"; then
+              gh issue edit "$n" --remove-label "$label"
+              echo "Removed '$label' from #$n"
+            fi
+          done
