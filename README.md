@@ -145,20 +145,25 @@ PixelBoard features a clean, minimal preference screen modeled directly after th
 ## Installation Guide
 
 > [!IMPORTANT]
-> This repository ships **no prebuilt binaries**: no APK, no `.mpp` patch bundle, no patcher jar, and no signing keys.
-> Only install PixelBoard APKs that you built yourself from this source. Do not install prebuilt APKs or patch bundles from upstream releases or other mirrors.
+> This repository commits **no prebuilt binaries**: no APK, no `.mpp` patch bundle, no patcher jar, and no signing keys.
+> Only install PixelBoard APKs built from this source: either by you, or by this repository's own [Release workflow](#5-release-builds-github-actions) on [this repository's Releases page](https://github.com/emilis3/PixelBoard/releases). Do not install prebuilt APKs or patch bundles from upstream releases or other mirrors.
 
 > [!CAUTION]
 > Sign every build with your own key. Signing keystores that were once committed to this repository have been removed from its history, but copies still exist upstream. **Never install anything signed with those old keys.** Keystores (`*.keystore`, `*.jks`, `*.p12`, `*.pem`) are git-ignored, and CI fails if one is committed.
 
-### Option A: Build from Source, Then Sideload via ADB
+### Option A: Download a Release Built from This Source
+1. On your phone, open this repository's [Releases page](https://github.com/emilis3/PixelBoard/releases) and download `PixelBoard-<tag>.apk`.
+2. Optionally, compare its SHA-256 with the one in the release notes.
+3. Tap the downloaded APK, allow installs from this source if prompted, and tap **Install**. Later releases are signed with the same key, so they install over the previous version.
+
+### Option B: Build from Source, Then Sideload via ADB
 1. Build the patch bundle and APK from source as described in [Building & Patching](#️-building--patching).
 2. Connect your Android phone via USB with USB Debugging enabled and run:
 ```bash
 adb install -r output/PixelBoard.apk
 ```
 
-### Option B: Patch via Morphe Manager (On-Device Patcher)
+### Option C: Patch via Morphe Manager (On-Device Patcher)
 You can patch your stock Gboard APK directly on your phone using **Morphe Manager**:
 1. Install **Morphe Manager** on your Android device.
 2. Get the two required files:
@@ -189,6 +194,8 @@ GBoardMod/
 ├── README.md                  # Project documentation & direct download links
 ├── build.sh                   # Builds the patch bundle from source and patches the stock APK
 ├── options.json               # Patch configuration profile
+├── release/
+│   └── pins.env               # Pinned Morphe CLI, base APK & signing-cert checksums for releases
 ├── patches/
 │   ├── PixelBoard.mpp         # Patch bundle compiled by build.sh (local only, not committed)
 │   └── patches-bundle.json    # Morphe Manager repository metadata
@@ -240,6 +247,34 @@ java -jar tools/patcher.jar patch \
   -r=output/patching-result.json \
   input/gboard.apk
 ```
+
+### 5. Release Builds (GitHub Actions)
+`.github/workflows/release.yml` builds an installable, signed APK entirely from this repository's source:
+
+1. Builds the patch bundle with `./gradlew :patches:buildAndroid`.
+2. Downloads the official Morphe CLI release and the stock Gboard 18.4.1 arm64 APK (from the owner's private repository). It checks both against the SHA-256 values pinned in [`release/pins.env`](release/pins.env) and fails on any mismatch.
+3. Patches the stock APK with `options.json`, unsigned. The third-party CLI never sees the signing key.
+4. Signs the APK with the owner key using `apksigner`. The key is decoded to a temporary file and deleted right after signing. The workflow then checks that the certificate matches `SIGNING_CERT_SHA256` in `release/pins.env`.
+5. Publishes a GitHub Release named after the tag, with the APK attached and its SHA-256 in the notes.
+
+**To release:** push a tag `v*` on a commit that is on `main` (for example `git tag v1.0.6 origin/main && git push origin v1.0.6`). You can also run the workflow manually from the Actions tab:
+- with a `tag` input, run on `main`, it publishes a release;
+- with no tag, it does a dry run and uploads the signed APK only as a workflow artifact.
+
+**Required repository secrets:** `PIXELBOARD_KEYSTORE_B64`, `PIXELBOARD_KEYSTORE_PASSWORD`, `PIXELBOARD_KEY_ALIAS`, `PIXELBOARD_KEY_PASSWORD` and `PIXELBOARD_BASE_TOKEN` (read-only access to the private base-APK repository). The workflow fails and names any that are missing.
+
+**One-time signing key setup (owner only; already done, do not regenerate):** keep one key forever, so updates install over each other.
+```bash
+keytool -genkeypair -v -storetype PKCS12 -keystore pixelboard-release.p12 \
+  -alias pixelboard -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=PixelBoard"
+base64 -w0 pixelboard-release.p12   # value for PIXELBOARD_KEYSTORE_B64
+keytool -list -v -storetype PKCS12 -keystore pixelboard-release.p12 | grep SHA256   # put into SIGNING_CERT_SHA256
+```
+For a PKCS12 keystore, the key password is the same as the store password. Back the `.p12` up offline: if it is lost, users must uninstall before they can install a release signed with a new key. Never commit it.
+
+**Updating a pin:**
+- New Morphe CLI: change `MORPHE_CLI_VERSION`, `MORPHE_CLI_URL` and `MORPHE_CLI_SHA256` together.
+- New base APK: upload it to the private repository, then update the `BASE_APK_*` values.
 
 ---
 
