@@ -1,0 +1,211 @@
+# Builds PixelBoard from source, patches the pinned stock Gboard APK with the
+# pinned official Morphe CLI, signs it with the owner key and publishes a
+# GitHub Release. All pinned inputs and checksums live in release/pins.env.
+#
+# Triggers:
+# - push of a tag `v*` whose commit is on `main` -> release named after the tag
+# - manual run: with `tag` set (run on `main`) -> release with that tag;
+#   with `tag` empty -> dry run, signed APK uploaded as a workflow artifact only
+name: Release PixelBoard APK
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create (e.g. v1.0.6). Leave empty for a dry run without a release.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  packages: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, sign & publish
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Load pinned inputs
+        run: grep -E '^[A-Z][A-Z0-9_]*=' release/pins.env >> "$GITHUB_ENV"
+
+      - name: Check release commit is on main
+        if: env.RELEASE_TAG != ''
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Releases must be built from a commit on main ($GITHUB_SHA is not on origin/main)."
+            exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+            echo "::error::Tag $RELEASE_TAG already exists; push the tag instead or pick a new one."
+            exit 1
+          fi
+
+      - name: Check required secrets
+        env:
+          PIXELBOARD_KEYSTORE_B64: ${{ secrets.PIXELBOARD_KEYSTORE_B64 }}
+          PIXELBOARD_KEYSTORE_PASSWORD: ${{ secrets.PIXELBOARD_KEYSTORE_PASSWORD }}
+          PIXELBOARD_KEY_ALIAS: ${{ secrets.PIXELBOARD_KEY_ALIAS }}
+          PIXELBOARD_KEY_PASSWORD: ${{ secrets.PIXELBOARD_KEY_PASSWORD }}
+          PIXELBOARD_BASE_TOKEN: ${{ secrets.PIXELBOARD_BASE_TOKEN }}
+        run: |
+          missing=""
+          for name in PIXELBOARD_KEYSTORE_B64 PIXELBOARD_KEYSTORE_PASSWORD PIXELBOARD_KEY_ALIAS PIXELBOARD_KEY_PASSWORD PIXELBOARD_BASE_TOKEN; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing"
+            exit 1
+          fi
+
+      - name: Set up OpenJDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android build-tools
+        run: sdkmanager "build-tools;${BUILD_TOOLS_VERSION}" >/dev/null
+
+      - name: Build Android Patch Bundle (.mpp)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd pixelboard-patches
+          chmod +x gradlew
+          ./gradlew :patches:buildAndroid
+          version=$(grep -E '^version\s*=' gradle.properties | cut -d'=' -f2 | tr -d ' ')
+          mpp="patches/build/libs/patches-${version}.mpp"
+          if [ ! -f "$mpp" ]; then
+            echo "::error::Patch bundle not found at pixelboard-patches/$mpp"
+            exit 1
+          fi
+          echo "MPP_PATH=$PWD/$mpp" >> "$GITHUB_ENV"
+
+      - name: Download & verify Morphe CLI
+        run: |
+          mkdir -p "$RUNNER_TEMP/tools"
+          curl -fsSL -o "$RUNNER_TEMP/tools/morphe-cli.jar" "$MORPHE_CLI_URL"
+          echo "${MORPHE_CLI_SHA256}  $RUNNER_TEMP/tools/morphe-cli.jar" | sha256sum -c - \
+            || { echo "::error::Morphe CLI ${MORPHE_CLI_VERSION} SHA-256 mismatch"; exit 1; }
+
+      - name: Download & verify stock Gboard APK
+        env:
+          GH_TOKEN: ${{ secrets.PIXELBOARD_BASE_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/base"
+          if ! gh release download "$BASE_APK_RELEASE" -R "$BASE_APK_REPO" \
+              -p "$BASE_APK_ASSET" -D "$RUNNER_TEMP/base"; then
+            echo "::error::Could not download base APK $BASE_APK_ASSET from $BASE_APK_REPO release $BASE_APK_RELEASE"
+            exit 1
+          fi
+          echo "${BASE_APK_SHA256}  $RUNNER_TEMP/base/$BASE_APK_ASSET" | sha256sum -c - \
+            || { echo "::error::Base APK SHA-256 mismatch"; exit 1; }
+
+      - name: Patch APK
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          java -jar "$RUNNER_TEMP/tools/morphe-cli.jar" patch \
+            --patches="$MPP_PATH" \
+            --options-file=options.json \
+            --striplibs=arm64-v8a \
+            --unsigned \
+            --temporary-files-path="$RUNNER_TEMP/patcher-tmp" \
+            -o="$RUNNER_TEMP/out/unsigned.apk" \
+            -r="$RUNNER_TEMP/out/patching-result.json" \
+            "$RUNNER_TEMP/base/$BASE_APK_ASSET"
+          cat "$RUNNER_TEMP/out/patching-result.json"
+          python3 - "$RUNNER_TEMP/out/patching-result.json" <<'EOF'
+          import json, sys
+          result = json.load(open(sys.argv[1]))
+          failed_steps = [s["step"] for s in result.get("patchingSteps", []) if not s.get("success")]
+          failed_patches = result.get("failedPatches", [])
+          if failed_steps or failed_patches or not result.get("appliedPatches"):
+              print(f"::error::Patching failed: steps={failed_steps} patches={failed_patches}")
+              sys.exit(1)
+          EOF
+
+      - name: Sign APK
+        env:
+          PIXELBOARD_KEYSTORE_B64: ${{ secrets.PIXELBOARD_KEYSTORE_B64 }}
+          PIXELBOARD_KEYSTORE_PASSWORD: ${{ secrets.PIXELBOARD_KEYSTORE_PASSWORD }}
+          PIXELBOARD_KEY_ALIAS: ${{ secrets.PIXELBOARD_KEY_ALIAS }}
+          PIXELBOARD_KEY_PASSWORD: ${{ secrets.PIXELBOARD_KEY_PASSWORD }}
+        run: |
+          bt="$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}"
+          ks="$RUNNER_TEMP/pixelboard.p12"
+          (umask 077; printf '%s' "$PIXELBOARD_KEYSTORE_B64" | base64 -d > "$ks")
+          name="PixelBoard-${RELEASE_TAG:-dryrun-${GITHUB_SHA::7}}.apk"
+          "$bt/zipalign" -P 16 -f 4 "$RUNNER_TEMP/out/unsigned.apk" "$RUNNER_TEMP/out/aligned.apk"
+          "$bt/apksigner" sign \
+            --ks "$ks" --ks-type PKCS12 \
+            --ks-key-alias "$PIXELBOARD_KEY_ALIAS" \
+            --ks-pass env:PIXELBOARD_KEYSTORE_PASSWORD \
+            --key-pass env:PIXELBOARD_KEY_PASSWORD \
+            --out "$RUNNER_TEMP/out/$name" \
+            "$RUNNER_TEMP/out/aligned.apk"
+          rm -f "$ks"
+          echo "APK_NAME=$name" >> "$GITHUB_ENV"
+          echo "APK_PATH=$RUNNER_TEMP/out/$name" >> "$GITHUB_ENV"
+
+      - name: Verify signature
+        run: |
+          bt="$ANDROID_HOME/build-tools/${BUILD_TOOLS_VERSION}"
+          "$bt/zipalign" -c -P 16 4 "$APK_PATH"
+          certs=$("$bt/apksigner" verify --print-certs "$APK_PATH")
+          echo "$certs"
+          if ! grep -qi "certificate SHA-256 digest: ${SIGNING_CERT_SHA256}$" <<<"$certs"; then
+            echo "::error::APK is not signed with the owner certificate (expected SHA-256 ${SIGNING_CERT_SHA256})"
+            exit 1
+          fi
+          sha=$(sha256sum "$APK_PATH" | cut -d' ' -f1)
+          echo "APK_SHA256=$sha" >> "$GITHUB_ENV"
+          echo "### $APK_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA-256: \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK (workflow artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK_NAME }}
+          path: ${{ env.APK_PATH }}
+
+      - name: Publish GitHub Release
+        if: env.RELEASE_TAG != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          notes="$RUNNER_TEMP/notes.md"
+          cat > "$notes" <<EOF
+          PixelBoard built from source at \`${GITHUB_SHA}\` and signed with the owner key.
+
+          - **APK:** \`${APK_NAME}\` (arm64-v8a, Android 10+, package \`com.akshaykadam.pixelboard\`)
+          - **APK SHA-256:** \`${APK_SHA256}\`
+          - **Signing certificate SHA-256:** \`${SIGNING_CERT_SHA256}\`
+          - **Base:** stock Gboard 18.4.1 (\`${BASE_APK_SHA256}\`)
+          - **Patcher:** Morphe CLI ${MORPHE_CLI_VERSION} (\`${MORPHE_CLI_SHA256}\`)
+          EOF
+          gh release create "$RELEASE_TAG" "$APK_PATH" \
+            --title "$RELEASE_TAG" \
+            --notes-file "$notes" \
+            --target "$GITHUB_SHA"
+
+      - name: Clean up
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/pixelboard.p12" "$RUNNER_TEMP/base" "$RUNNER_TEMP/patcher-tmp"
