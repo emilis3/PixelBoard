@@ -5,16 +5,8 @@
 **Supercharged Gboard Mod featuring Google Pixel 11 series's Rambler Voice Typing, AI Writing Assistant & Writing Tools V2 [No Root].**
 
 <p>
-  <a href="https://github.com/Akshayykadam/PixelBoard/releases/download/v18.4.1-Stable/PixelBoard-18.4.1.apk">
-    <img src="https://img.shields.io/badge/📥_Direct_Download-v18.4.1_Stable_(127_MB)-00C853?style=for-the-badge&logo=android&logoColor=white" height="42" alt="Download PixelBoard Stable APK"/>
-  </a>
-  &nbsp;&nbsp;
   <a href="https://www.apkmirror.com/apk/google-inc/gboard/gboard-the-google-keyboard-18-4-1-985164140-release/">
     <img src="https://img.shields.io/badge/🌐_Stock_Base_APK-APKMirror_(v18.4.1)-FF6F00?style=for-the-badge&logo=google&logoColor=white" height="42" alt="Download Stock Gboard Base APK from APKMirror"/>
-  </a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/Akshayykadam/PixelBoard/raw/main/patches/PixelBoard.mpp">
-    <img src="https://img.shields.io/badge/📦_Patch_Bundle-PixelBoard.mpp_(1.5_MB)-2979FF?style=for-the-badge&logo=android&logoColor=white" height="42" alt="Download PixelBoard Patch Bundle"/>
   </a>
 </p>
 
@@ -152,35 +144,28 @@ PixelBoard features a clean, minimal preference screen modeled directly after th
 
 ## Installation Guide
 
-### Option A: Direct Download on Your Phone (Easiest)
-1. Download directly from the [**PixelBoard v18.4.1 Release**](https://github.com/Akshayykadam/PixelBoard/releases/tag/v18.4.1-Stable):
-   - [**PixelBoard Stable APK (v18.4.1, 127 MB)**](https://github.com/Akshayykadam/PixelBoard/releases/download/v18.4.1-Stable/PixelBoard-18.4.1.apk) — ready-to-install signed APK.
-   - [**Stock Gboard Base APK (122 MB)**](https://www.apkmirror.com/apk/google-inc/gboard/gboard-the-google-keyboard-18-4-1-985164140-release/) — download the official bundle from APKMirror for patching.
-   - [**PixelBoard Patch Bundle (PixelBoard.mpp, 1.5 MB)**](https://github.com/Akshayykadam/PixelBoard/raw/main/patches/PixelBoard.mpp) — for patching via Morphe Manager.
-2. Tap the downloaded `.apk` in your notification drawer or File Manager (e.g., **Files by Google**).
-3. If prompted, toggle **"Allow from this source"** to permit installation.
-4. Tap **Install**.
+> [!IMPORTANT]
+> This repository ships **no prebuilt binaries**: no APK, no `.mpp` patch bundle, no patcher jar, and no signing keys.
+> Only install PixelBoard APKs that you built yourself from this source. Do not install prebuilt APKs or patch bundles from upstream releases or other mirrors.
 
-### Option B: Sideload via ADB (For Developers)
-Connect your Android phone via USB with USB Debugging enabled:
+### Option A: Build from Source, Then Sideload via ADB
+1. Build the patch bundle and APK from source as described in [Building & Patching](#️-building--patching).
+2. Connect your Android phone via USB with USB Debugging enabled and run:
 ```bash
 adb install -r output/PixelBoard.apk
 ```
 
-### Option C: Patch via Morphe Manager (On-Device Patcher)
+### Option B: Patch via Morphe Manager (On-Device Patcher)
 You can patch your stock Gboard APK directly on your phone using **Morphe Manager**:
 1. Install **Morphe Manager** on your Android device.
 2. Get the two required files:
-   - **Patch Bundle**: [**PixelBoard.mpp**](https://github.com/Akshayykadam/PixelBoard/raw/main/patches/PixelBoard.mpp)
+   - **Patch Bundle**: the `.mpp` you built yourself (`pixelboard-patches/patches/build/libs/patches-<version>.mpp`, or the `pixelboard-patches-bundle` artifact from this repository's **Build & Test** workflow run).
    - **Stock Base APK**: Download the official base bundle from [**APKMirror (Gboard v18.4.1 Release)**](https://www.apkmirror.com/apk/google-inc/gboard/gboard-the-google-keyboard-18-4-1-985164140-release/).
-3. In Morphe Manager, select **Storage**, choose the stock Gboard APK, and load `PixelBoard.mpp` as the patch source.
+3. In Morphe Manager, select **Storage**, choose the stock Gboard APK, and load your `.mpp` as the patch source.
 4. Tap **Patch** and then **Install**!
 
-> [!TIP]
-> You can also add PixelBoard as a custom auto-updating patch source in Morphe Manager by adding:
-> ```text
-> https://raw.githubusercontent.com/Akshayykadam/PixelBoard/main/patches-bundle.json
-> ```
+> [!WARNING]
+> Do not add a remote auto-updating patch source in Morphe Manager. It downloads and applies prebuilt bundles that you have not built or reviewed.
 
 ---
 
@@ -199,19 +184,19 @@ You can patch your stock Gboard APK directly on your phone using **Morphe Manage
 ```text
 GBoardMod/
 ├── README.md                  # Project documentation & direct download links
-├── build.sh                   # 1-click automated build & patching script (100% offline)
+├── build.sh                   # Builds the patch bundle from source and patches the stock APK
 ├── options.json               # Patch configuration profile
 ├── patches/
-│   ├── PixelBoard.mpp         # Pre-bundled offline patch pack (~1.4 MB)
+│   ├── PixelBoard.mpp         # Patch bundle compiled by build.sh (local only, not committed)
 │   └── patches-bundle.json    # Morphe Manager repository metadata
 ├── input/
 │   └── gboard.apk             # Base stock Gboard APK (v18.4.1 Release, ~122 MB)
 ├── output/
-│   ├── PixelBoard.apk         # Compiled APK (local build output / hosted on GitHub Releases)
+│   ├── PixelBoard.apk         # Compiled APK (local build output only)
 │   └── patching-result.json   # Patch verification report
 ├── tools/
-│   ├── patcher.jar            # Standalone patch compiler CLI (Java 21)
-│   └── patcher-data/          # Signing keystore & local storage
+│   ├── patcher.jar            # Morphe CLI you supply yourself (not committed)
+│   └── patcher-data/          # Locally generated signing keystore & temp files (git-ignored)
 ├── LICENSE                    # GNU General Public License v3.0
 └── pixelboard-patches/        # PixelBoard patch source repository (Kotlin/Smali)
     ├── gradle/
@@ -223,19 +208,17 @@ GBoardMod/
 
 ## 🛠️ Building & Patching
 
-### 1. Instant 1-Click Build (100% Offline)
-Place your stock Gboard APK at `input/gboard.apk`, then run:
+### 1. Prerequisites
+- Java 21.
+- A GitHub token with `read:packages` (as `gpr.user` / `gpr.key` in `~/.gradle/gradle.properties`, or `GITHUB_ACTOR` / `GITHUB_TOKEN`). Gradle needs it to resolve the Morphe Gradle plugin from GitHub Packages.
+- The Morphe CLI (`morphe-desktop`) at `tools/patcher.jar`. It is no longer committed. Build it from source from the [MorpheApp](https://github.com/MorpheApp) project, or download it from there and verify it yourself.
+- The stock Gboard APK at `input/gboard.apk`.
+
+### 2. Build
 ```bash
 ./build.sh
 ```
-This runs completely offline using the pre-bundled `patches/PixelBoard.mpp` and `tools/patcher.jar`. It automatically patches, aligns, and signs `output/PixelBoard.apk`.
-
-### 2. Rebuilding Patch Bundle from Source (Optional)
-If you modify any Smali or Kotlin patch code inside `pixelboard-patches/`:
-```bash
-./build.sh --rebuild
-```
-This recompiles the `.mpp` patch pack using Gradle and immediately applies it to the stock APK.
+No patch bundle is committed, so on the first run `build.sh` compiles `patches/PixelBoard.mpp` from `pixelboard-patches/` with Gradle. It then patches, aligns and signs `output/PixelBoard.apk` with a locally generated keystore. Later runs reuse the local bundle; run `./build.sh --rebuild` to recompile it after pulling or changing patch code.
 
 ### 3. Running Test Suite
 Verify patch bytecode transformations and contract integrity:
@@ -244,7 +227,7 @@ cd pixelboard-patches
 JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./gradlew test
 ```
 
-### 4. Manual CLI Usage (Requires Java 21)
+### 4. Manual CLI Usage (Requires Java 21 and a self-built bundle)
 ```bash
 java -jar tools/patcher.jar patch \
   --patches=patches/PixelBoard.mpp \

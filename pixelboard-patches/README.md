@@ -13,23 +13,9 @@
 
 ### 📥 Looking for the Ready-to-Install APK?
 
-**You don't need to build from source unless you want to customize patches:**
+This repository ships **no prebuilt APKs or patch bundles**. Build the bundle from this source (see [Compilation](#compilation) below) and patch the stock base APK yourself:
 
-<p>
-  <a href="https://github.com/Akshayykadam/PixelBoard/releases/download/v18.4.1-Stable/PixelBoard-18.4.1.apk">
-    <img src="https://img.shields.io/badge/📥_Download_Stable_APK-v18.4.1_(127_MB)-00C853?style=for-the-badge&logo=android&logoColor=white" height="40" alt="Download PixelBoard Stable APK"/>
-  </a>
-  &nbsp;&nbsp;
-  <a href="https://www.apkmirror.com/apk/google-inc/gboard/gboard-the-google-keyboard-18-4-1-985164140-release/">
-    <img src="https://img.shields.io/badge/🌐_Stock_Base_APK-APKMirror_(v18.4.1)-FF6F00?style=for-the-badge&logo=google&logoColor=white" height="40" alt="Download Stock Gboard Base APK from APKMirror"/>
-  </a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/Akshayykadam/PixelBoard/raw/main/patches/PixelBoard.mpp">
-    <img src="https://img.shields.io/badge/📦_Download_Patch_Bundle-PixelBoard.mpp_(1.5_MB)-2979FF?style=for-the-badge&logo=android&logoColor=white" height="40" alt="Download PixelBoard Patch Bundle"/>
-  </a>
-</p>
-
-[**⬇️ Direct Download Stable APK (v18.4.1)**](https://github.com/Akshayykadam/PixelBoard/releases/download/v18.4.1-Stable/PixelBoard-18.4.1.apk) • [**🌐 Stock Base APK (APKMirror)**](https://www.apkmirror.com/apk/google-inc/gboard/gboard-the-google-keyboard-18-4-1-985164140-release/) • [**📦 Patch Bundle (.mpp)**](https://github.com/Akshayykadam/PixelBoard/raw/main/patches/PixelBoard.mpp) • [**📦 GitHub Releases**](https://github.com/Akshayykadam/PixelBoard/releases)
+[**🌐 Stock Base APK (APKMirror)**](https://www.apkmirror.com/apk/google-inc/gboard/gboard-the-google-keyboard-18-4-1-985164140-release/)
 
 ---
 
